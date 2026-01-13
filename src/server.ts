@@ -31,6 +31,7 @@ app.use(cors({
     'http://localhost:3000',
     'http://localhost:3001',
     'http://localhost:3002',
+    'https://time-tracker-frontend-five.vercel.app',
     'https://time-tracker-frontend-git-main-itachis-projects-6e935950.vercel.app',
     /\.vercel\.app$/
   ],
