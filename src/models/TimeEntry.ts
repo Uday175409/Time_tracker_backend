@@ -6,6 +6,8 @@ export interface ITimeEntry extends Document {
   endTime: Date | null;
   date: string;
   durationSeconds: number;
+  userId: mongoose.Types.ObjectId;
+  description?: string;
 }
 
 const TimeEntrySchema = new Schema<ITimeEntry>(
@@ -30,6 +32,15 @@ const TimeEntrySchema = new Schema<ITimeEntry>(
     durationSeconds: {
       type: Number,
       default: 0,
+    },
+    userId: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+    },
+    description: {
+      type: String,
+      default: '',
     },
   },
   {

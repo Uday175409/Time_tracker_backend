@@ -19,6 +19,7 @@ import express from 'express';
 import cors from 'cors';
 import dbConnect from './config/mongodb.js';
 import trackRoutes from './routes/track.js';
+import authRoutes from './routes/auth.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -35,6 +36,7 @@ app.use(express.json());
 dbConnect();
 
 // Routes
+app.use('/api/auth', authRoutes);
 app.use('/api/track', trackRoutes);
 
 app.get('/', (req, res) => {

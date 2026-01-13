@@ -6,10 +6,10 @@ const router = express.Router();
 // POST /api/track/start - Start tracking a category
 router.post('/start', async (req: Request, res: Response) => {
   try {
-    const { category } = req.body;
+    const { category, userId, description } = req.body;
 
-    if (!category) {
-      return res.status(400).json({ error: 'Category is required' });
+    if (!category || !userId) {
+      return res.status(400).json({ error: 'Category and userId are required' });
     }
 
     const validCategories = ['Python', 'SQL', 'Datasetu', 'Break', 'TT'];
@@ -20,8 +20,8 @@ router.post('/start', async (req: Request, res: Response) => {
     const now = new Date();
     const today = now.toISOString().split('T')[0]; // YYYY-MM-DD
 
-    // Stop any running entry
-    const runningEntry = await TimeEntry.findOne({ endTime: null });
+    // Stop any running entry for this user
+    const runningEntry = await TimeEntry.findOne({ userId, endTime: null });
     if (runningEntry) {
       const duration = Math.floor((now.getTime() - runningEntry.startTime.getTime()) / 1000);
       runningEntry.endTime = now;
@@ -36,6 +36,8 @@ router.post('/start', async (req: Request, res: Response) => {
       endTime: null,
       date: today,
       durationSeconds: 0,
+      userId,
+      description: description || '',
     });
 
     res.json({ success: true, entry: newEntry });
@@ -48,7 +50,13 @@ router.post('/start', async (req: Request, res: Response) => {
 // POST /api/track/stop - Stop current tracking
 router.post('/stop', async (req: Request, res: Response) => {
   try {
-    const runningEntry = await TimeEntry.findOne({ endTime: null });
+    const { userId } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ error: 'userId is required' });
+    }
+
+    const runningEntry = await TimeEntry.findOne({ userId, endTime: null });
 
     if (!runningEntry) {
       return res.status(404).json({ error: 'No running entry found' });
@@ -71,13 +79,19 @@ router.post('/stop', async (req: Request, res: Response) => {
 // GET /api/track/today - Get today's totals and current running entry
 router.get('/today', async (req: Request, res: Response) => {
   try {
+    const { userId } = req.query;
+
+    if (!userId) {
+      return res.status(400).json({ error: 'userId is required' });
+    }
+
     const today = new Date().toISOString().split('T')[0];
 
-    // Get all today's entries
-    const entries = await TimeEntry.find({ date: today });
+    // Get all today's entries for this user
+    const entries = await TimeEntry.find({ userId, date: today });
 
-    // Find running entry
-    const runningEntry = await TimeEntry.findOne({ endTime: null });
+    // Find running entry for this user
+    const runningEntry = await TimeEntry.findOne({ userId, endTime: null });
 
     // Calculate totals per category
     const totals: Record<string, number> = {
