@@ -12,8 +12,8 @@ router.post('/login', async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, message: 'Name and password required' });
     }
 
-    // Find user by name
-    let user = await User.findOne({ name });
+    // Find user by name (case insensitive)
+    let user = await User.findOne({ name: { $regex: new RegExp(`^${name}$`, 'i') } });
 
     if (user) {
       // Simple password check (in production, use bcrypt)
@@ -21,7 +21,7 @@ router.post('/login', async (req: Request, res: Response) => {
         return res.status(401).json({ success: false, message: 'Invalid password' });
       }
     } else {
-      // Create new user
+      // Create new user with original case
       user = await User.create({ name, password });
     }
 
