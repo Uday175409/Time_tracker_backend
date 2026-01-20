@@ -12,7 +12,7 @@ router.post('/start', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Category and userId are required' });
     }
 
-    const validCategories = ['Python', 'SQL', 'Datasetu', 'Break', 'TT'];
+    const validCategories = ['Python', 'SQL', 'Midas', 'Datasetu', 'Break', 'TT'];
     if (!validCategories.includes(category)) {
       return res.status(400).json({ error: 'Invalid category' });
     }
@@ -97,6 +97,7 @@ router.get('/today', async (req: Request, res: Response) => {
     const totals: Record<string, number> = {
       Python: 0,
       SQL: 0,
+      Midas: 0,
       Datasetu: 0,
       Break: 0,
       TT: 0,
