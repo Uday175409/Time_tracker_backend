@@ -1,5 +1,12 @@
 import Category, { DEFAULT_CATEGORIES } from '../models/Category.js';
 
+const PRODUCTIVE_CACHE_TTL_MS = 60_000;
+const productiveNamesCache = new Map<string, { expiresAt: number; names: string[] }>();
+
+function clearProductiveNamesCache(userId: string) {
+  productiveNamesCache.delete(userId);
+}
+
 /**
  * CategoryService manages user-specific work categories.
  * On first access, default categories are seeded automatically.
@@ -10,13 +17,13 @@ export class CategoryService {
    * If the user has none yet, seed with defaults.
    */
   static async getCategories(userId: string) {
-    let categories = await Category.find({ userId }).sort({ order: 1 });
+    let categories = await Category.find({ userId }).sort({ order: 1 }).lean();
 
     // First-time user — seed with defaults
     if (categories.length === 0) {
       const docs = DEFAULT_CATEGORIES.map((c) => ({ ...c, userId }));
       await Category.insertMany(docs);
-      categories = await Category.find({ userId }).sort({ order: 1 });
+      categories = await Category.find({ userId }).sort({ order: 1 }).lean();
     }
 
     return categories;
@@ -46,6 +53,8 @@ export class CategoryService {
       order,
     });
 
+    clearProductiveNamesCache(userId);
+
     return category;
   }
 
@@ -53,6 +62,7 @@ export class CategoryService {
   static async deleteCategory(categoryId: string, userId: string) {
     const category = await Category.findOneAndDelete({ _id: categoryId, userId });
     if (!category) throw new Error('Category not found or access denied');
+    clearProductiveNamesCache(userId);
     return category;
   }
 
@@ -61,7 +71,22 @@ export class CategoryService {
    * Used by analytics to compute productivity score dynamically.
    */
   static async getProductiveNames(userId: string): Promise<string[]> {
-    const categories = await this.getCategories(userId);
-    return categories.filter((c) => c.isProductive).map((c) => c.name);
+    const cached = productiveNamesCache.get(userId);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.names;
+    }
+
+    await this.getCategories(userId);
+    const categories = await Category.find({ userId, isProductive: true })
+      .select('name -_id')
+      .lean();
+    const names = categories.map((c) => c.name);
+
+    productiveNamesCache.set(userId, {
+      names,
+      expiresAt: Date.now() + PRODUCTIVE_CACHE_TTL_MS,
+    });
+
+    return names;
   }
 }

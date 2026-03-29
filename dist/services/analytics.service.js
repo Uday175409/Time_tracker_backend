@@ -1,5 +1,18 @@
 import TimeEntry from '../models/TimeEntry.js';
 import { CategoryService } from './category.service.js';
+async function getCompletedEntries(userId, startDate, endDate) {
+    const timeFilter = endDate
+        ? { $gte: startDate, $lte: endDate }
+        : { $gte: startDate };
+    return TimeEntry.find({
+        userId,
+        startTime: timeFilter,
+        status: 'completed'
+    })
+        .select('category durationSeconds date startTime -_id')
+        .sort({ startTime: 1 })
+        .lean();
+}
 export class AnalyticsService {
     static async getProductivityStats(userId, range) {
         const now = new Date();
@@ -10,15 +23,12 @@ export class AnalyticsService {
             startDate.setDate(now.getDate() - 7);
         else
             startDate.setDate(now.getDate() - 30);
-        const entries = await TimeEntry.find({
-            userId,
-            startTime: { $gte: startDate },
-            status: 'completed'
-        })
-            .sort({ startTime: 1 })
-            .lean();
-        // Use user's own productive categories instead of a hardcoded list
-        const productiveCategories = new Set(await CategoryService.getProductiveNames(userId));
+        const [entries, productiveNames] = await Promise.all([
+            getCompletedEntries(userId, startDate),
+            CategoryService.getProductiveNames(userId),
+        ]);
+        // Use user's own productive categories instead of a hardcoded list.
+        const productiveCategories = new Set(productiveNames);
         let productiveSeconds = 0;
         let totalSeconds = 0;
         let streak = 0;
@@ -49,12 +59,11 @@ export class AnalyticsService {
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - days);
         startDate.setHours(0, 0, 0, 0);
-        const entries = await TimeEntry.find({
-            userId,
-            startTime: { $gte: startDate, $lte: endDate },
-            status: 'completed',
-        }).lean();
-        const productiveCategories = new Set(await CategoryService.getProductiveNames(userId));
+        const [entries, productiveNames] = await Promise.all([
+            getCompletedEntries(userId, startDate, endDate),
+            CategoryService.getProductiveNames(userId),
+        ]);
+        const productiveCategories = new Set(productiveNames);
         // Build a map: date → { totalSeconds, productiveSeconds, sessions }
         const dateMap = {};
         // Pre-fill every date so we get zero days too
@@ -90,11 +99,7 @@ export class AnalyticsService {
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - weeks * 7);
         startDate.setHours(0, 0, 0, 0);
-        const entries = await TimeEntry.find({
-            userId,
-            startTime: { $gte: startDate, $lte: endDate },
-            status: 'completed',
-        }).lean();
+        const entries = await getCompletedEntries(userId, startDate, endDate);
         // Group by ISO week → category → seconds
         const weekMap = {};
         entries.forEach((e) => {
@@ -123,11 +128,7 @@ export class AnalyticsService {
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - days);
         startDate.setHours(0, 0, 0, 0);
-        const entries = await TimeEntry.find({
-            userId,
-            startTime: { $gte: startDate, $lte: endDate },
-            status: 'completed',
-        }).lean();
+        const entries = await getCompletedEntries(userId, startDate, endDate);
         // Build map: YYYY-MM-DD → total hours
         const dateMap = {};
         for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
@@ -150,12 +151,11 @@ export class AnalyticsService {
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - 90);
         startDate.setHours(0, 0, 0, 0);
-        const entries = await TimeEntry.find({
-            userId,
-            startTime: { $gte: startDate },
-            status: 'completed',
-        }).lean();
-        const productiveCategories = new Set(await CategoryService.getProductiveNames(userId));
+        const [entries, productiveNames] = await Promise.all([
+            getCompletedEntries(userId, startDate),
+            CategoryService.getProductiveNames(userId),
+        ]);
+        const productiveCategories = new Set(productiveNames);
         // Group by day-of-week
         const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
         const dayTotals = new Array(7).fill(0);
@@ -174,8 +174,6 @@ export class AnalyticsService {
         let bestDayIdx = 0;
         let bestDayAvg = 0;
         dayTotals.forEach((total, i) => {
-            const weekCount = Math.max(Math.ceil(dayCounts[i] ? dayCounts[i] / 1 : 0), 1);
-            // We want *total* per day-of-week
             const avg = total;
             if (avg > bestDayAvg) {
                 bestDayAvg = avg;

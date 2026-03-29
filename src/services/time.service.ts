@@ -46,10 +46,22 @@ export class TimeService {
         const now = new Date();
         const dateStr = now.toISOString().split('T')[0];
 
-        const entries = await TimeEntry.find({
-            userId,
-            date: dateStr,
-        }).sort({ startTime: -1 });
+        const [entries, fallbackRunningEntry] = await Promise.all([
+            TimeEntry.find({
+                userId,
+                date: dateStr,
+            })
+                .select('category startTime endTime date durationSeconds description isIdle status')
+                .sort({ startTime: -1 })
+                .lean(),
+            TimeEntry.findOne({
+                userId,
+                status: 'running',
+            })
+                .sort({ startTime: -1 })
+                .select('category startTime endTime date durationSeconds description isIdle status')
+                .lean(),
+        ]);
 
         const totals: Record<string, number> = {};
         let runningEntry = null;
@@ -65,12 +77,7 @@ export class TimeService {
         // If no running entry was found in today's entries, check if there's
         // one from a previous date (e.g. started before UTC midnight).
         // This prevents sessions from "vanishing" at the date boundary.
-        if (!runningEntry) {
-            runningEntry = await TimeEntry.findOne({
-                userId,
-                status: 'running',
-            }).sort({ startTime: -1 });
-        }
+        if (!runningEntry) runningEntry = fallbackRunningEntry;
 
         return { entries, totals, runningEntry };
     }
@@ -86,6 +93,7 @@ export class TimeService {
             startTime: { $gte: startDate, $lte: endDate },
             status: 'completed'
         })
+            .select('category startTime endTime date durationSeconds description isIdle status')
             .sort({ startTime: -1 })
             .limit(maxEntries)
             .lean();

@@ -17,6 +17,7 @@ console.log('Environment loaded:', {
 
 import express from 'express';
 import cors from 'cors';
+import compression from 'compression';
 import dbConnect from './config/mongodb.js';
 import trackRoutes from './routes/track.js';
 import authRoutes from './routes/auth.js';
@@ -39,6 +40,7 @@ app.use(cors({
   },
   credentials: true
 }));
+app.use(compression());
 app.use(express.json({ limit: '100kb' }));
 
 // Connect to MongoDB

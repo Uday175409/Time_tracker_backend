@@ -11,7 +11,7 @@ const setModeSchema = z.object({
     userId: z.string().min(1),
     mode: z.enum(['25/5', '50/10', 'custom']),
     customWorkMinutes: z.number().min(1).max(180).optional(),
-    customBreakMinutes: z.number().min(1).max(60).optional(),
+    customBreakMinutes: z.number().min(0).max(60).optional(),
 });
 const startWorkSchema = z.object({
     userId: z.string().min(1),

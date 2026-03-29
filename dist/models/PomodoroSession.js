@@ -31,7 +31,7 @@ const PomodoroSessionSchema = new Schema({
     customBreakMinutes: {
         type: Number,
         default: 5,
-        min: 1,
+        min: 0,
         max: 60,
     },
     activePhase: {
