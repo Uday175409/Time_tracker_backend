@@ -24,16 +24,29 @@ import authRoutes from './routes/auth.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:3000')
+const configuredOrigins = (process.env.FRONTEND_URL || 'http://localhost:3000')
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean);
+
+const exactAllowedOrigins = configuredOrigins.filter((origin) => !origin.includes('*'));
+const wildcardAllowedOrigins = configuredOrigins
+  .filter((origin) => origin.includes('*'))
+  .map((pattern) => {
+    const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
+    return new RegExp(`^${escaped}$`);
+  });
+
+const isOriginAllowed = (origin: string): boolean => {
+  if (exactAllowedOrigins.includes(origin)) return true;
+  return wildcardAllowedOrigins.some((regex) => regex.test(origin));
+};
 
 // Middleware
 app.use(cors({
   origin: (origin, callback) => {
     // Allow non-browser requests (no origin header) and configured origins.
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!origin || isOriginAllowed(origin)) {
       return callback(null, true);
     }
     return callback(new Error('Not allowed by CORS'));
