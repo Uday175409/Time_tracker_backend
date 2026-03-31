@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { AnalyticsService } from '../services/analytics.service.js';
+import { handleControllerError } from '../utils/error-handler.js';
 import { z } from 'zod';
 
 const productivityQuerySchema = z.object({
@@ -34,7 +35,7 @@ export const getProductivity = async (req: Request, res: Response) => {
         const data = await AnalyticsService.getProductivityStats(userId, range);
         res.json({ success: true, data });
     } catch (error) {
-        res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+        handleControllerError(res, error);
     }
 };
 
@@ -46,7 +47,7 @@ export const getDailyTrend = async (req: Request, res: Response) => {
         const data = await AnalyticsService.getDailyTrend(userId, days);
         res.json({ success: true, data });
     } catch (error) {
-        res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+        handleControllerError(res, error);
     }
 };
 
@@ -58,7 +59,7 @@ export const getWeeklyCategories = async (req: Request, res: Response) => {
         const data = await AnalyticsService.getWeeklyCategoryComparison(userId, weeks);
         res.json({ success: true, data });
     } catch (error) {
-        res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+        handleControllerError(res, error);
     }
 };
 
@@ -70,7 +71,7 @@ export const getHeatmap = async (req: Request, res: Response) => {
         const data = await AnalyticsService.getHeatmapData(userId, days);
         res.json({ success: true, data });
     } catch (error) {
-        res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+        handleControllerError(res, error);
     }
 };
 
@@ -82,6 +83,6 @@ export const getInsights = async (req: Request, res: Response) => {
         const data = await AnalyticsService.getInsights(userId);
         res.json({ success: true, data });
     } catch (error) {
-        res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+        handleControllerError(res, error);
     }
 };

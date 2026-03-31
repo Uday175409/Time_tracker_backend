@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { PomodoroService } from '../services/pomodoro.service.js';
+import { handleControllerError } from '../utils/error-handler.js';
 import { z } from 'zod';
 
 const completePomodoroSchema = z.object({
@@ -31,12 +32,12 @@ const userIdSchema = z.object({
 export const getPomodoroToday = async (req: Request, res: Response) => {
   try {
     const userId = req.query.userId as string;
-    if (!userId) return res.status(400).json({ success: false, message: 'userId required' });
+    if (!userId) return res.status(400).json({ success: false, message: 'userId required', errorType: 'missing_required_field' });
 
     const session = await PomodoroService.getTodaySession(userId);
     res.json({ success: true, session });
   } catch (error) {
-    res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+    handleControllerError(res, error);
   }
 };
 
@@ -47,7 +48,7 @@ export const startWork = async (req: Request, res: Response) => {
     const result = await PomodoroService.startWork(userId, category);
     res.json({ success: true, ...result });
   } catch (error) {
-    res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+    handleControllerError(res, error);
   }
 };
 
@@ -58,7 +59,7 @@ export const completePomodoro = async (req: Request, res: Response) => {
     const result = await PomodoroService.completePomodoro(userId, category);
     res.json({ success: true, ...result });
   } catch (error) {
-    res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+    handleControllerError(res, error);
   }
 };
 
@@ -69,7 +70,7 @@ export const completeBreak = async (req: Request, res: Response) => {
     const result = await PomodoroService.completeBreak(userId);
     res.json({ success: true, ...result });
   } catch (error) {
-    res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+    handleControllerError(res, error);
   }
 };
 
@@ -80,7 +81,7 @@ export const cancelPomodoro = async (req: Request, res: Response) => {
     const result = await PomodoroService.cancelPomodoro(userId);
     res.json({ success: true, ...result });
   } catch (error) {
-    res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+    handleControllerError(res, error);
   }
 };
 
@@ -91,7 +92,7 @@ export const pausePomodoro = async (req: Request, res: Response) => {
     const result = await PomodoroService.pausePomodoro(userId);
     res.json({ success: true, ...result });
   } catch (error) {
-    res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+    handleControllerError(res, error);
   }
 };
 
@@ -102,7 +103,7 @@ export const resumePomodoro = async (req: Request, res: Response) => {
     const result = await PomodoroService.resumePomodoro(userId);
     res.json({ success: true, ...result });
   } catch (error) {
-    res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+    handleControllerError(res, error);
   }
 };
 
@@ -113,6 +114,6 @@ export const setMode = async (req: Request, res: Response) => {
     const session = await PomodoroService.setMode(userId, mode, customWorkMinutes, customBreakMinutes);
     res.json({ success: true, session });
   } catch (error) {
-    res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+    handleControllerError(res, error);
   }
 };

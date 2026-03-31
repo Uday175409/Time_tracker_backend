@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { TimeService } from '../services/time.service.js';
+import { handleControllerError } from '../utils/error-handler.js';
 import { z } from 'zod';
 
 const startSchema = z.object({
@@ -38,7 +39,7 @@ export const startTracking = async (req: Request, res: Response) => {
         const entry = await TimeService.startEntry(userId, category, description);
         res.json({ success: true, entry });
     } catch (error) {
-        res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+        handleControllerError(res, error);
     }
 };
 
@@ -48,7 +49,7 @@ export const stopTracking = async (req: Request, res: Response) => {
         const entry = await TimeService.stopEntry(userId);
         res.json({ success: true, entry });
     } catch (error) {
-        res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+        handleControllerError(res, error);
     }
 };
 
@@ -60,7 +61,7 @@ export const getToday = async (req: Request, res: Response) => {
         const data = await TimeService.getTodayData(userId);
         res.json({ success: true, ...data });
     } catch (error) {
-        res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+        handleControllerError(res, error);
     }
 };
 
@@ -72,7 +73,7 @@ export const getHistory = async (req: Request, res: Response) => {
         const history = await TimeService.getHistory(userId, days);
         res.json({ success: true, history });
     } catch (error) {
-        res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+        handleControllerError(res, error);
     }
 };
 
@@ -82,6 +83,6 @@ export const updateEntry = async (req: Request, res: Response) => {
         const entry = await TimeService.updateEntry(entryId, userId, updates);
         res.json({ success: true, entry });
     } catch (error) {
-        res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+        handleControllerError(res, error);
     }
 }

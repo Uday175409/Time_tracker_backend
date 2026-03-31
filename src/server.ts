@@ -21,6 +21,7 @@ import compression from 'compression';
 import dbConnect from './config/mongodb.js';
 import trackRoutes from './routes/track.js';
 import authRoutes from './routes/auth.js';
+import { globalErrorHandler } from './utils/error-handler.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -85,15 +86,11 @@ app.get('/', (req, res) => {
 });
 
 app.use((req, res) => {
-  res.status(404).json({ success: false, message: 'Route not found' });
+  res.status(404).json({ success: false, message: 'Route not found', errorType: 'route_not_found' });
 });
 
 app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error('Unhandled server error:', err);
-  if (res.headersSent) {
-    return next(err);
-  }
-  return res.status(500).json({ success: false, message: 'Internal server error' });
+  globalErrorHandler(err, req, res, next);
 });
 
 app.listen(PORT, () => {

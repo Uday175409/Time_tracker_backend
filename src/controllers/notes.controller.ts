@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { NotesService } from '../services/notes.service.js';
+import { handleControllerError } from '../utils/error-handler.js';
 import { z } from 'zod';
 
 // --- Zod schemas for request validation ---
@@ -30,10 +31,7 @@ export const createNote = async (req: Request, res: Response) => {
     const note = await NotesService.createNote(userId, linkedType, referenceId, content);
     res.json({ success: true, note });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error instanceof Error ? error.message : 'Validation error',
-    });
+    handleControllerError(res, error);
   }
 };
 
@@ -44,10 +42,7 @@ export const updateNote = async (req: Request, res: Response) => {
     const note = await NotesService.updateNote(noteId, userId, content);
     res.json({ success: true, note });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error instanceof Error ? error.message : 'Error',
-    });
+    handleControllerError(res, error);
   }
 };
 
@@ -58,7 +53,7 @@ export const getNotes = async (req: Request, res: Response) => {
     const notes = await NotesService.getNotes(userId, linkedType, referenceId);
     res.json({ success: true, notes });
   } catch (error) {
-    res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+    handleControllerError(res, error);
   }
 };
 
@@ -67,14 +62,11 @@ export const deleteNote = async (req: Request, res: Response) => {
     const noteId = req.params.id;
     const userId = req.query.userId as string;
     if (!userId) {
-      return res.status(400).json({ success: false, message: 'userId is required' });
+      return res.status(400).json({ success: false, message: 'userId is required', errorType: 'missing_required_field' });
     }
     const note = await NotesService.deleteNote(noteId, userId);
     res.json({ success: true, note });
   } catch (error) {
-    res.status(400).json({
-      success: false,
-      message: error instanceof Error ? error.message : 'Error',
-    });
+    handleControllerError(res, error);
   }
 };
