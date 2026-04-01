@@ -6,12 +6,21 @@ const TimeEntryHistorySchema = new Schema({
     previousStartTime: Date,
     previousEndTime: Date,
 }, { _id: false });
+const TimeEntryAuditHistorySchema = new Schema({
+    oldStartTime: { type: Date, required: true },
+    oldEndTime: { type: Date, default: null },
+    oldCategory: { type: String, required: true },
+    oldDescription: { type: String, default: '' },
+    changedAt: { type: Date, default: Date.now },
+    reason: { type: String, required: true },
+}, { _id: false });
 const TimeEntrySchema = new Schema({
     category: {
         type: String,
         required: true,
-        enum: ['Python', 'SQL', 'Midas', 'Datasetu', 'TT'],
-        // 'Break' is NOT tracked here — managed exclusively by PomodoroSession
+        trim: true,
+        // Categories are user-defined in Category collection; validation is enforced in TimeService.
+        // 'Break' is still blocked there because Pomodoro owns break tracking.
     },
     startTime: {
         type: Date,
@@ -51,6 +60,31 @@ const TimeEntrySchema = new Schema({
         enum: ['running', 'completed', 'paused'],
         default: 'running',
     },
+    source: {
+        type: String,
+        enum: ['auto', 'manual'],
+        default: 'auto',
+        index: true,
+    },
+    isRegularized: {
+        type: Boolean,
+        default: false,
+        index: true,
+    },
+    regularizationReason: {
+        type: String,
+        default: '',
+    },
+    regularizationStatus: {
+        type: String,
+        enum: ['pending', 'approved', 'rejected'],
+        default: 'approved',
+        index: true,
+    },
+    auditHistory: {
+        type: [TimeEntryAuditHistorySchema],
+        default: [],
+    },
 }, {
     timestamps: true,
 });
@@ -61,5 +95,6 @@ TimeEntrySchema.index({ userId: 1, status: 1 });
 // Covers frequently used filters for recent completed and running entry lookups
 TimeEntrySchema.index({ userId: 1, status: 1, startTime: -1 });
 TimeEntrySchema.index({ userId: 1, status: 1, date: 1 });
+TimeEntrySchema.index({ userId: 1, startTime: 1, endTime: 1 });
 const TimeEntry = mongoose.models.TimeEntry || mongoose.model('TimeEntry', TimeEntrySchema);
 export default TimeEntry;

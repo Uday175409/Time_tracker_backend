@@ -1,4 +1,5 @@
 import { NotesService } from '../services/notes.service.js';
+import { handleControllerError } from '../utils/error-handler.js';
 import { z } from 'zod';
 // --- Zod schemas for request validation ---
 const createNoteSchema = z.object({
@@ -24,10 +25,7 @@ export const createNote = async (req, res) => {
         res.json({ success: true, note });
     }
     catch (error) {
-        res.status(400).json({
-            success: false,
-            message: error instanceof Error ? error.message : 'Validation error',
-        });
+        handleControllerError(res, error);
     }
 };
 export const updateNote = async (req, res) => {
@@ -38,10 +36,7 @@ export const updateNote = async (req, res) => {
         res.json({ success: true, note });
     }
     catch (error) {
-        res.status(400).json({
-            success: false,
-            message: error instanceof Error ? error.message : 'Error',
-        });
+        handleControllerError(res, error);
     }
 };
 export const getNotes = async (req, res) => {
@@ -51,7 +46,7 @@ export const getNotes = async (req, res) => {
         res.json({ success: true, notes });
     }
     catch (error) {
-        res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+        handleControllerError(res, error);
     }
 };
 export const deleteNote = async (req, res) => {
@@ -59,15 +54,12 @@ export const deleteNote = async (req, res) => {
         const noteId = req.params.id;
         const userId = req.query.userId;
         if (!userId) {
-            return res.status(400).json({ success: false, message: 'userId is required' });
+            return res.status(400).json({ success: false, message: 'userId is required', errorType: 'missing_required_field' });
         }
         const note = await NotesService.deleteNote(noteId, userId);
         res.json({ success: true, note });
     }
     catch (error) {
-        res.status(400).json({
-            success: false,
-            message: error instanceof Error ? error.message : 'Error',
-        });
+        handleControllerError(res, error);
     }
 };

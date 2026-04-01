@@ -1,6 +1,7 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
+import { handleControllerError } from '../utils/error-handler.js';
 import User from '../models/User.js';
 const router = express.Router();
 const SALT_ROUNDS = 10;
@@ -22,7 +23,7 @@ router.post('/login', async (req, res) => {
             const isHash = storedPassword.startsWith('$2a$') || storedPassword.startsWith('$2b$') || storedPassword.startsWith('$2y$');
             const isValid = isHash ? await bcrypt.compare(password, storedPassword) : storedPassword === password;
             if (!isValid) {
-                return res.status(401).json({ success: false, message: 'Invalid password' });
+                return res.status(401).json({ success: false, message: 'Invalid password', errorType: 'invalid_credentials' });
             }
             // Seamless migration for legacy plaintext password records.
             if (!isHash) {
@@ -45,7 +46,7 @@ router.post('/login', async (req, res) => {
     }
     catch (error) {
         console.error('Login error:', error);
-        res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Server error' });
+        handleControllerError(res, error, 500);
     }
 });
 export default router;

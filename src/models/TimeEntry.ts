@@ -8,6 +8,15 @@ export interface ITimeEntryHistory {
   previousEndTime: Date | null;
 }
 
+export interface ITimeEntryAuditHistory {
+  oldStartTime: Date;
+  oldEndTime: Date | null;
+  oldCategory: string;
+  oldDescription?: string;
+  changedAt: Date;
+  reason: string;
+}
+
 export interface ITimeEntry extends Document {
   category: string;
   startTime: Date;
@@ -19,6 +28,11 @@ export interface ITimeEntry extends Document {
   isIdle?: boolean;
   history?: ITimeEntryHistory[];
   status: 'running' | 'completed' | 'paused';
+  source: 'auto' | 'manual';
+  isRegularized: boolean;
+  regularizationReason?: string;
+  regularizationStatus: 'pending' | 'approved' | 'rejected';
+  auditHistory: ITimeEntryAuditHistory[];
 }
 
 const TimeEntryHistorySchema = new Schema({
@@ -29,13 +43,23 @@ const TimeEntryHistorySchema = new Schema({
   previousEndTime: Date,
 }, { _id: false });
 
+const TimeEntryAuditHistorySchema = new Schema({
+  oldStartTime: { type: Date, required: true },
+  oldEndTime: { type: Date, default: null },
+  oldCategory: { type: String, required: true },
+  oldDescription: { type: String, default: '' },
+  changedAt: { type: Date, default: Date.now },
+  reason: { type: String, required: true },
+}, { _id: false });
+
 const TimeEntrySchema = new Schema<ITimeEntry>(
   {
     category: {
       type: String,
       required: true,
-      enum: ['Python', 'SQL', 'Midas', 'Datasetu', 'TT'],
-      // 'Break' is NOT tracked here — managed exclusively by PomodoroSession
+      trim: true,
+      // Categories are user-defined in Category collection; validation is enforced in TimeService.
+      // 'Break' is still blocked there because Pomodoro owns break tracking.
     },
     startTime: {
       type: Date,
@@ -75,6 +99,31 @@ const TimeEntrySchema = new Schema<ITimeEntry>(
       enum: ['running', 'completed', 'paused'],
       default: 'running',
     },
+    source: {
+      type: String,
+      enum: ['auto', 'manual'],
+      default: 'auto',
+      index: true,
+    },
+    isRegularized: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    regularizationReason: {
+      type: String,
+      default: '',
+    },
+    regularizationStatus: {
+      type: String,
+      enum: ['pending', 'approved', 'rejected'],
+      default: 'approved',
+      index: true,
+    },
+    auditHistory: {
+      type: [TimeEntryAuditHistorySchema],
+      default: [],
+    },
   },
   {
     timestamps: true,
@@ -88,6 +137,7 @@ TimeEntrySchema.index({ userId: 1, status: 1 });
 // Covers frequently used filters for recent completed and running entry lookups
 TimeEntrySchema.index({ userId: 1, status: 1, startTime: -1 });
 TimeEntrySchema.index({ userId: 1, status: 1, date: 1 });
+TimeEntrySchema.index({ userId: 1, startTime: 1, endTime: 1 });
 
 const TimeEntry: Model<ITimeEntry> =
   mongoose.models.TimeEntry || mongoose.model<ITimeEntry>('TimeEntry', TimeEntrySchema);

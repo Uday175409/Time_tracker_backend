@@ -1,4 +1,5 @@
 import { AnalyticsService } from '../services/analytics.service.js';
+import { handleControllerError } from '../utils/error-handler.js';
 import { z } from 'zod';
 const productivityQuerySchema = z.object({
     userId: z.string().min(1),
@@ -28,7 +29,7 @@ export const getProductivity = async (req, res) => {
         res.json({ success: true, data });
     }
     catch (error) {
-        res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+        handleControllerError(res, error);
     }
 };
 export const getDailyTrend = async (req, res) => {
@@ -40,7 +41,7 @@ export const getDailyTrend = async (req, res) => {
         res.json({ success: true, data });
     }
     catch (error) {
-        res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+        handleControllerError(res, error);
     }
 };
 export const getWeeklyCategories = async (req, res) => {
@@ -52,7 +53,7 @@ export const getWeeklyCategories = async (req, res) => {
         res.json({ success: true, data });
     }
     catch (error) {
-        res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+        handleControllerError(res, error);
     }
 };
 export const getHeatmap = async (req, res) => {
@@ -64,7 +65,7 @@ export const getHeatmap = async (req, res) => {
         res.json({ success: true, data });
     }
     catch (error) {
-        res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+        handleControllerError(res, error);
     }
 };
 export const getInsights = async (req, res) => {
@@ -76,6 +77,6 @@ export const getInsights = async (req, res) => {
         res.json({ success: true, data });
     }
     catch (error) {
-        res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+        handleControllerError(res, error);
     }
 };

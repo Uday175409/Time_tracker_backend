@@ -1,4 +1,5 @@
 import { EODService } from '../services/eod.service.js';
+import { handleControllerError } from '../utils/error-handler.js';
 import { z } from 'zod';
 // --- Zod schemas ---
 const updateEODSchema = z.object({
@@ -17,16 +18,13 @@ export const getEOD = async (req, res) => {
         const userId = req.query.userId;
         const { date } = dateParamSchema.parse(req.params);
         if (!userId) {
-            return res.status(400).json({ success: false, message: 'userId is required' });
+            return res.status(400).json({ success: false, message: 'userId is required', errorType: 'missing_required_field' });
         }
         const eod = await EODService.getOrCreateEOD(userId, date);
         res.json({ success: true, eod });
     }
     catch (error) {
-        res.status(400).json({
-            success: false,
-            message: error instanceof Error ? error.message : 'Error',
-        });
+        handleControllerError(res, error);
     }
 };
 /** PUT /eod/:date — update user-editable EOD fields (summary, highlights, blockers) */
@@ -38,9 +36,6 @@ export const updateEOD = async (req, res) => {
         res.json({ success: true, eod });
     }
     catch (error) {
-        res.status(400).json({
-            success: false,
-            message: error instanceof Error ? error.message : 'Validation error',
-        });
+        handleControllerError(res, error);
     }
 };

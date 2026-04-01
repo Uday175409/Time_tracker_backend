@@ -1,4 +1,5 @@
 import { TemplateService } from '../services/template.service.js';
+import { handleControllerError } from '../utils/error-handler.js';
 import { z } from 'zod';
 const sectionSchema = z.object({
     key: z.string().min(1),
@@ -22,12 +23,12 @@ export const getTemplates = async (req, res) => {
     try {
         const userId = req.query.userId;
         if (!userId)
-            return res.status(400).json({ success: false, message: 'userId required' });
+            return res.status(400).json({ success: false, message: 'userId required', errorType: 'missing_required_field' });
         const templates = await TemplateService.getTemplates(userId);
         res.json({ success: true, templates });
     }
     catch (error) {
-        res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+        handleControllerError(res, error);
     }
 };
 /** GET /templates/:id?userId=... */
@@ -36,12 +37,12 @@ export const getTemplate = async (req, res) => {
         const userId = req.query.userId;
         const templateId = req.params.id;
         if (!userId)
-            return res.status(400).json({ success: false, message: 'userId required' });
+            return res.status(400).json({ success: false, message: 'userId required', errorType: 'missing_required_field' });
         const template = await TemplateService.getTemplate(templateId, userId);
         res.json({ success: true, template });
     }
     catch (error) {
-        res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+        handleControllerError(res, error);
     }
 };
 /** POST /templates */
@@ -52,10 +53,7 @@ export const createTemplate = async (req, res) => {
         res.json({ success: true, template });
     }
     catch (error) {
-        if (error.code === 11000) {
-            return res.status(409).json({ success: false, message: 'Template with this name already exists' });
-        }
-        res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+        handleControllerError(res, error);
     }
 };
 /** PUT /templates/:id */
@@ -67,7 +65,7 @@ export const updateTemplate = async (req, res) => {
         res.json({ success: true, template });
     }
     catch (error) {
-        res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+        handleControllerError(res, error);
     }
 };
 /** DELETE /templates/:id?userId=... */
@@ -76,11 +74,11 @@ export const deleteTemplate = async (req, res) => {
         const templateId = req.params.id;
         const userId = req.query.userId;
         if (!userId)
-            return res.status(400).json({ success: false, message: 'userId required' });
+            return res.status(400).json({ success: false, message: 'userId required', errorType: 'missing_required_field' });
         const template = await TemplateService.deleteTemplate(templateId, userId);
         res.json({ success: true, template });
     }
     catch (error) {
-        res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error' });
+        handleControllerError(res, error);
     }
 };

@@ -1,17 +1,188 @@
 import mongoose from 'mongoose';
 import TimeEntry from '../models/TimeEntry.js';
+import Category from '../models/Category.js';
+
+type ManualEntryInput = {
+    userId: string;
+    category: string;
+    description?: string;
+    startTime: Date;
+    endTime: Date;
+    overwrite?: boolean;
+};
+
+type RegularizeInput = {
+    userId: string;
+    startTime?: Date;
+    endTime?: Date;
+    description?: string;
+    category?: string;
+    reason: string;
+};
+
+type ReviewRegularizationInput = {
+    status: 'approved' | 'rejected';
+};
+
+const toObjectId = (value: string): mongoose.Types.ObjectId => new mongoose.Types.ObjectId(value);
+
+const requestError = (message: string, status = 400): Error & { statusCode: number } => {
+    const error = new Error(message) as Error & { statusCode: number };
+    error.statusCode = status;
+    return error;
+};
 
 export class TimeService {
-    static readonly ALLOWED_CATEGORIES = ['Python', 'SQL', 'Midas', 'Datasetu', 'TT'];
+    private static async validateCategory(userId: string, category: string) {
+        if (category === 'Break' || category === 'break') {
+            throw requestError('Break is reserved for the Pomodoro system and cannot be manually tracked.');
+        }
+
+        const found = await Category.findOne({ userId, name: category })
+            .collation({ locale: 'en', strength: 2 })
+            .select('_id')
+            .lean();
+
+        if (!found) {
+            throw requestError(`Invalid category "${category}". Please add it in Edit Categories first.`);
+        }
+    }
+
+    static async validateTimeOverlap(
+        userId: string,
+        startTime: Date,
+        endTime: Date,
+        excludeEntryId?: string
+    ) {
+        const query: Record<string, unknown> = {
+            userId: toObjectId(userId),
+            startTime: { $lt: endTime },
+            $or: [
+                { endTime: { $gt: startTime } },
+                { status: 'running', endTime: null },
+            ],
+        };
+
+        if (excludeEntryId) {
+            query._id = { $ne: toObjectId(excludeEntryId) };
+        }
+
+        const overlapping = await TimeEntry.findOne(query)
+            .select('_id category startTime endTime status')
+            .lean();
+
+        if (overlapping) {
+            throw requestError('Time entry overlaps with an existing session.', 409);
+        }
+    }
+
+    private static async getOverlappingEntries(
+        userId: string,
+        startTime: Date,
+        endTime: Date,
+        excludeEntryId?: string
+    ) {
+        const query: Record<string, unknown> = {
+            userId: toObjectId(userId),
+            startTime: { $lt: endTime },
+            $or: [
+                { endTime: { $gt: startTime } },
+                { status: 'running', endTime: null },
+            ],
+        };
+
+        if (excludeEntryId) {
+            query._id = { $ne: toObjectId(excludeEntryId) };
+        }
+
+        return TimeEntry.find(query).sort({ startTime: 1 });
+    }
+
+    private static recalculateEntry(entry: {
+        startTime: Date;
+        endTime: Date | null;
+        durationSeconds: number;
+        date: string;
+    }) {
+        if (!entry.endTime) return;
+        entry.durationSeconds = Math.max(0, Math.floor((entry.endTime.getTime() - entry.startTime.getTime()) / 1000));
+        entry.date = entry.startTime.toISOString().split('T')[0];
+    }
+
+    private static async resolveManualOverwriteOverlaps(userId: string, startTime: Date, endTime: Date) {
+        const overlaps = await this.getOverlappingEntries(userId, startTime, endTime);
+        if (overlaps.length === 0) return;
+
+        for (const entry of overlaps) {
+            const entryStart = new Date(entry.startTime);
+            const entryEnd = entry.endTime ? new Date(entry.endTime) : null;
+
+            // Running sessions should be finalized before creating overlapping manual ranges.
+            if (!entryEnd && entry.status === 'running') {
+                throw requestError('Cannot overwrite an active running session. Stop it first, then retry manual overwrite.', 409);
+            }
+
+            if (!entryEnd) {
+                await entry.deleteOne();
+                continue;
+            }
+
+            const coversLeft = entryStart < startTime;
+            const coversRight = entryEnd > endTime;
+
+            if (!coversLeft && !coversRight) {
+                // Existing entry is fully inside manual window.
+                await entry.deleteOne();
+                continue;
+            }
+
+            if (coversLeft && coversRight) {
+                // Split entry into left and right pieces around manual window.
+                const rightPiece = await TimeEntry.create({
+                    userId: entry.userId,
+                    category: entry.category,
+                    description: entry.description || '',
+                    startTime: endTime,
+                    endTime: entryEnd,
+                    date: endTime.toISOString().split('T')[0],
+                    durationSeconds: 0,
+                    status: 'completed',
+                    source: entry.source || 'auto',
+                    isRegularized: false,
+                    regularizationStatus: 'approved',
+                    regularizationReason: '',
+                    isIdle: entry.isIdle || false,
+                });
+
+                rightPiece.durationSeconds = Math.max(0, Math.floor((entryEnd.getTime() - endTime.getTime()) / 1000));
+                await rightPiece.save();
+
+                entry.endTime = startTime;
+                this.recalculateEntry(entry);
+                await entry.save();
+                continue;
+            }
+
+            if (coversLeft && entryEnd > startTime) {
+                // Trim right side of existing entry.
+                entry.endTime = startTime;
+                this.recalculateEntry(entry);
+                await entry.save();
+                continue;
+            }
+
+            if (coversRight && entryStart < endTime) {
+                // Trim left side of existing entry.
+                entry.startTime = endTime;
+                this.recalculateEntry(entry);
+                await entry.save();
+                continue;
+            }
+        }
+    }
 
     static async startEntry(userId: string, category: string, description?: string) {
-        // Reject 'Break' category — breaks are managed by PomodoroSession only
-        if (category === 'Break' || category === 'break') {
-            throw new Error('Break is reserved for the Pomodoro system and cannot be manually tracked.');
-        }
-        if (!this.ALLOWED_CATEGORIES.includes(category)) {
-            throw new Error(`Invalid category. Allowed: ${this.ALLOWED_CATEGORIES.join(', ')}`);
-        }
+        await this.validateCategory(userId, category);
         // Enforce single active session: stop any running entry first
         await this.stopEntry(userId);
 
@@ -27,6 +198,9 @@ export class TimeService {
             startTime: now,
             date: dateStr,
             status: 'running',
+            source: 'auto',
+            isRegularized: false,
+            regularizationStatus: 'approved',
         });
 
         return entry;
@@ -51,6 +225,42 @@ export class TimeService {
         return entry;
     }
 
+    static async createManualEntry(data: ManualEntryInput) {
+        const { userId, category, description, startTime, endTime, overwrite = false } = data;
+
+        await this.validateCategory(userId, category);
+
+        if (startTime >= endTime) {
+            throw requestError('startTime must be before endTime.');
+        }
+
+        if (overwrite) {
+            await this.resolveManualOverwriteOverlaps(userId, startTime, endTime);
+        } else {
+            await this.validateTimeOverlap(userId, startTime, endTime);
+        }
+
+        const durationSeconds = Math.floor((endTime.getTime() - startTime.getTime()) / 1000);
+        const dateStr = startTime.toISOString().split('T')[0];
+
+        const entry = await TimeEntry.create({
+            userId,
+            category,
+            description: description || '',
+            startTime,
+            endTime,
+            date: dateStr,
+            durationSeconds,
+            status: 'completed',
+            source: 'manual',
+            isRegularized: false,
+            regularizationStatus: 'approved',
+            regularizationReason: '',
+        });
+
+        return entry;
+    }
+
     static async getTodayData(userId: string) {
         const now = new Date();
         const dateStr = now.toISOString().split('T')[0];
@@ -60,7 +270,7 @@ export class TimeService {
                 userId,
                 date: dateStr,
             })
-                .select('category startTime endTime date durationSeconds description isIdle status')
+                .select('category startTime endTime date durationSeconds description isIdle status source isRegularized regularizationStatus regularizationReason auditHistory')
                 .sort({ startTime: -1 })
                 .lean(),
             TimeEntry.findOne({
@@ -68,7 +278,7 @@ export class TimeService {
                 status: 'running',
             })
                 .sort({ startTime: -1 })
-                .select('category startTime endTime date durationSeconds description isIdle status')
+                .select('category startTime endTime date durationSeconds description isIdle status source isRegularized regularizationStatus regularizationReason auditHistory')
                 .lean(),
         ]);
 
@@ -102,7 +312,7 @@ export class TimeService {
             startTime: { $gte: startDate, $lte: endDate },
             status: 'completed'
         })
-            .select('category startTime endTime date durationSeconds description isIdle status')
+            .select('category startTime endTime date durationSeconds description isIdle status source isRegularized regularizationStatus regularizationReason auditHistory')
             .sort({ startTime: -1 })
             .limit(maxEntries)
             .lean();
@@ -148,13 +358,72 @@ export class TimeService {
         if (updates.startTime) entry.startTime = updates.startTime;
         if (updates.endTime) entry.endTime = updates.endTime;
         if (updates.description !== undefined) entry.description = updates.description;
-        if (updates.category) entry.category = updates.category;
+        if (updates.category) {
+            await this.validateCategory(userId, updates.category);
+            entry.category = updates.category;
+        }
 
         // Recalculate duration if start/end changed
         if (entry.endTime) {
             entry.durationSeconds = Math.floor((new Date(entry.endTime).getTime() - new Date(entry.startTime).getTime()) / 1000);
         }
 
+        await entry.save();
+        return entry;
+    }
+
+    static async regularizeEntry(entryId: string, input: RegularizeInput) {
+        const entry = await TimeEntry.findOne({ _id: entryId, userId: input.userId });
+        if (!entry) throw requestError('Entry not found', 404);
+        if (entry.status === 'running') {
+            throw requestError('Cannot regularize a running entry.', 400);
+        }
+
+        const nextStart = input.startTime ?? entry.startTime;
+        const nextEnd = input.endTime ?? entry.endTime;
+        if (!nextEnd) {
+            throw requestError('Regularized entry must include an endTime.', 400);
+        }
+        if (nextStart >= nextEnd) {
+            throw requestError('startTime must be before endTime.', 400);
+        }
+
+        if (input.category) await this.validateCategory(input.userId, input.category);
+
+        await this.validateTimeOverlap(input.userId, nextStart, nextEnd, entryId);
+
+        entry.auditHistory = entry.auditHistory || [];
+        entry.auditHistory.push({
+            oldStartTime: entry.startTime,
+            oldEndTime: entry.endTime,
+            oldCategory: entry.category,
+            oldDescription: entry.description || '',
+            changedAt: new Date(),
+            reason: input.reason,
+        });
+
+        entry.startTime = nextStart;
+        entry.endTime = nextEnd;
+        entry.category = input.category ?? entry.category;
+        if (input.description !== undefined) entry.description = input.description;
+        entry.date = nextStart.toISOString().split('T')[0];
+        entry.durationSeconds = Math.floor((nextEnd.getTime() - nextStart.getTime()) / 1000);
+        entry.isRegularized = true;
+        entry.regularizationReason = input.reason;
+        entry.regularizationStatus = 'pending';
+
+        await entry.save();
+        return entry;
+    }
+
+    static async reviewRegularization(entryId: string, input: ReviewRegularizationInput) {
+        const entry = await TimeEntry.findById(entryId);
+        if (!entry) throw requestError('Entry not found', 404);
+        if (!entry.isRegularized) {
+            throw requestError('Entry has no pending regularization.', 400);
+        }
+
+        entry.regularizationStatus = input.status;
         await entry.save();
         return entry;
     }
