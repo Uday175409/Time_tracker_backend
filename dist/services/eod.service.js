@@ -8,6 +8,9 @@ import { CategoryService } from './category.service.js';
  * (summary text, highlights, blockers). Every edit is versioned.
  */
 export class EODService {
+    static getCurrentDateString() {
+        return new Date().toISOString().split('T')[0];
+    }
     /**
      * Retrieve (or generate) the EOD summary for a given user + date.
      * Always recalculates metrics from TimeEntries so numbers stay accurate
@@ -37,6 +40,15 @@ export class EODService {
             await eod.save();
         }
         return eod;
+    }
+    /**
+     * Retrieve the EOD summary for the server's current canonical date.
+     * This keeps every client anchored to the same date key.
+     */
+    static async getCurrentEOD(userId) {
+        const date = this.getCurrentDateString();
+        const eod = await this.getOrCreateEOD(userId, date);
+        return { date, eod };
     }
     /**
      * Update the user-editable parts of an EOD summary.

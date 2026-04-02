@@ -35,6 +35,22 @@ export const getEOD = async (req: Request, res: Response) => {
   }
 };
 
+/** GET /eod/current?userId=... — retrieve the canonical current-date EOD */
+export const getCurrentEOD = async (req: Request, res: Response) => {
+  try {
+    const userId = req.query.userId as string;
+
+    if (!userId) {
+      return res.status(400).json({ success: false, message: 'userId is required', errorType: 'missing_required_field' });
+    }
+
+    const data = await EODService.getCurrentEOD(userId);
+    res.json({ success: true, ...data });
+  } catch (error) {
+    handleControllerError(res, error);
+  }
+};
+
 /** PUT /eod/:date — update user-editable EOD fields (summary, highlights, blockers) */
 export const updateEOD = async (req: Request, res: Response) => {
   try {
