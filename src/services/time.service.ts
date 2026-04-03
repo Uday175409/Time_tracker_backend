@@ -318,7 +318,10 @@ export class TimeService {
         if (!runningEntry) runningEntry = fallbackRunningEntry;
 
         const payload = { entries, totals, runningEntry };
-        await writeJsonCache(cacheKey, payload, getSecondsUntilEndOfUtcDay());
+        // Only cache if there are entries or a running session; skip caching empty results
+        if (entries.length > 0 || runningEntry) {
+            await writeJsonCache(cacheKey, payload, getSecondsUntilEndOfUtcDay());
+        }
 
         return payload;
     }

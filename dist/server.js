@@ -66,6 +66,21 @@ import pomodoroRoutes from './routes/pomodoro.js';
 app.use('/api/pomodoro', pomodoroRoutes);
 import templateRoutes from './routes/templates.js';
 app.use('/api/templates', templateRoutes);
+// Debug endpoint to clear cache (useful for clearing stale cached data)
+import { clearLiveDayCaches } from './lib/redis-cache.js';
+app.post('/api/debug/clear-cache', async (req, res) => {
+    try {
+        const { userId } = req.body;
+        if (!userId) {
+            return res.status(400).json({ success: false, message: 'userId is required' });
+        }
+        await clearLiveDayCaches(userId);
+        res.json({ success: true, message: 'Cache cleared for user', userId });
+    }
+    catch (error) {
+        res.status(500).json({ success: false, message: String(error) });
+    }
+});
 app.get('/', (req, res) => {
     res.json({ message: 'Time Tracker API' });
 });
