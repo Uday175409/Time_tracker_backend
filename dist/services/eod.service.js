@@ -1,6 +1,7 @@
 import EODSummary from '../models/EODSummary.js';
 import TimeEntry from '../models/TimeEntry.js';
 import { CategoryService } from './category.service.js';
+import { clearLiveDayCaches, getCurrentEodCacheKey, getSecondsUntilEndOfUtcDay, getUtcDateString, readJsonCache, writeJsonCache, } from '../lib/redis-cache.js';
 /**
  * EODService manages End-of-Day summaries.
  * Each user gets one summary per calendar date. The summary blends
@@ -9,7 +10,7 @@ import { CategoryService } from './category.service.js';
  */
 export class EODService {
     static getCurrentDateString() {
-        return new Date().toISOString().split('T')[0];
+        return getUtcDateString();
     }
     /**
      * Retrieve (or generate) the EOD summary for a given user + date.
@@ -47,8 +48,15 @@ export class EODService {
      */
     static async getCurrentEOD(userId) {
         const date = this.getCurrentDateString();
+        const cacheKey = getCurrentEodCacheKey(userId, date);
+        const cached = await readJsonCache(cacheKey);
+        if (cached) {
+            return cached;
+        }
         const eod = await this.getOrCreateEOD(userId, date);
-        return { date, eod };
+        const payload = { date, eod: eod.toObject() };
+        await writeJsonCache(cacheKey, payload, getSecondsUntilEndOfUtcDay());
+        return payload;
     }
     /**
      * Update the user-editable parts of an EOD summary.
@@ -72,6 +80,7 @@ export class EODService {
         if (updates.blockers !== undefined)
             eod.blockers = updates.blockers;
         await eod.save();
+        await clearLiveDayCaches(userId);
         return eod;
     }
     /**

@@ -1,4 +1,5 @@
 import Category, { DEFAULT_CATEGORIES } from '../models/Category.js';
+import { clearLiveDayCaches } from '../lib/redis-cache.js';
 const PRODUCTIVE_CACHE_TTL_MS = 60000;
 const productiveNamesCache = new Map();
 function clearProductiveNamesCache(userId) {
@@ -40,6 +41,7 @@ export class CategoryService {
             order,
         });
         clearProductiveNamesCache(userId);
+        await clearLiveDayCaches(userId);
         return category;
     }
     /** Delete a category by ID (only if it belongs to the user) */
@@ -48,6 +50,7 @@ export class CategoryService {
         if (!category)
             throw new Error('Category not found or access denied');
         clearProductiveNamesCache(userId);
+        await clearLiveDayCaches(userId);
         return category;
     }
     /**

@@ -1,6 +1,14 @@
 import mongoose from 'mongoose';
 import TimeEntry from '../models/TimeEntry.js';
 import Category from '../models/Category.js';
+import {
+    clearLiveDayCaches,
+    getSecondsUntilEndOfUtcDay,
+    getTodayCacheKey,
+    getUtcDateString,
+    readJsonCache,
+    writeJsonCache,
+} from '../lib/redis-cache.js';
 
 type ManualEntryInput = {
     userId: string;
@@ -203,6 +211,8 @@ export class TimeService {
             regularizationStatus: 'approved',
         });
 
+        await clearLiveDayCaches(userId);
+
         return entry;
     }
 
@@ -221,6 +231,8 @@ export class TimeService {
         entry.durationSeconds = duration;
         entry.status = 'completed';
         await entry.save();
+
+        await clearLiveDayCaches(userId);
 
         return entry;
     }
@@ -258,12 +270,19 @@ export class TimeService {
             regularizationReason: '',
         });
 
+        await clearLiveDayCaches(userId);
+
         return entry;
     }
 
     static async getTodayData(userId: string) {
-        const now = new Date();
-        const dateStr = now.toISOString().split('T')[0];
+        const dateStr = getUtcDateString();
+        const cacheKey = getTodayCacheKey(userId, dateStr);
+        const cached = await readJsonCache<{ entries: any[]; totals: Record<string, number>; runningEntry: any | null }>(cacheKey);
+
+        if (cached) {
+            return cached;
+        }
 
         const [entries, fallbackRunningEntry] = await Promise.all([
             TimeEntry.find({
@@ -298,7 +317,10 @@ export class TimeService {
         // This prevents sessions from "vanishing" at the date boundary.
         if (!runningEntry) runningEntry = fallbackRunningEntry;
 
-        return { entries, totals, runningEntry };
+        const payload = { entries, totals, runningEntry };
+        await writeJsonCache(cacheKey, payload, getSecondsUntilEndOfUtcDay());
+
+        return payload;
     }
 
     static async getHistory(userId: string, days: number = 7) {
@@ -369,6 +391,7 @@ export class TimeService {
         }
 
         await entry.save();
+        await clearLiveDayCaches(userId);
         return entry;
     }
 
@@ -413,6 +436,7 @@ export class TimeService {
         entry.regularizationStatus = 'pending';
 
         await entry.save();
+        await clearLiveDayCaches(input.userId);
         return entry;
     }
 
@@ -425,6 +449,7 @@ export class TimeService {
 
         entry.regularizationStatus = input.status;
         await entry.save();
+        await clearLiveDayCaches(String(entry.userId));
         return entry;
     }
 }

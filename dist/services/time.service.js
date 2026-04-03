@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import TimeEntry from '../models/TimeEntry.js';
 import Category from '../models/Category.js';
+import { clearLiveDayCaches, getSecondsUntilEndOfUtcDay, getTodayCacheKey, getUtcDateString, readJsonCache, writeJsonCache, } from '../lib/redis-cache.js';
 const toObjectId = (value) => new mongoose.Types.ObjectId(value);
 const requestError = (message, status = 400) => {
     const error = new Error(message);
@@ -140,6 +141,7 @@ export class TimeService {
             isRegularized: false,
             regularizationStatus: 'approved',
         });
+        await clearLiveDayCaches(userId);
         return entry;
     }
     static async stopEntry(userId) {
@@ -155,6 +157,7 @@ export class TimeService {
         entry.durationSeconds = duration;
         entry.status = 'completed';
         await entry.save();
+        await clearLiveDayCaches(userId);
         return entry;
     }
     static async createManualEntry(data) {
@@ -185,11 +188,16 @@ export class TimeService {
             regularizationStatus: 'approved',
             regularizationReason: '',
         });
+        await clearLiveDayCaches(userId);
         return entry;
     }
     static async getTodayData(userId) {
-        const now = new Date();
-        const dateStr = now.toISOString().split('T')[0];
+        const dateStr = getUtcDateString();
+        const cacheKey = getTodayCacheKey(userId, dateStr);
+        const cached = await readJsonCache(cacheKey);
+        if (cached) {
+            return cached;
+        }
         const [entries, fallbackRunningEntry] = await Promise.all([
             TimeEntry.find({
                 userId,
@@ -221,7 +229,9 @@ export class TimeService {
         // This prevents sessions from "vanishing" at the date boundary.
         if (!runningEntry)
             runningEntry = fallbackRunningEntry;
-        return { entries, totals, runningEntry };
+        const payload = { entries, totals, runningEntry };
+        await writeJsonCache(cacheKey, payload, getSecondsUntilEndOfUtcDay());
+        return payload;
     }
     static async getHistory(userId, days = 7) {
         const endDate = new Date();
@@ -281,6 +291,7 @@ export class TimeService {
             entry.durationSeconds = Math.floor((new Date(entry.endTime).getTime() - new Date(entry.startTime).getTime()) / 1000);
         }
         await entry.save();
+        await clearLiveDayCaches(userId);
         return entry;
     }
     static async regularizeEntry(entryId, input) {
@@ -321,6 +332,7 @@ export class TimeService {
         entry.regularizationReason = input.reason;
         entry.regularizationStatus = 'pending';
         await entry.save();
+        await clearLiveDayCaches(input.userId);
         return entry;
     }
     static async reviewRegularization(entryId, input) {
@@ -332,6 +344,7 @@ export class TimeService {
         }
         entry.regularizationStatus = input.status;
         await entry.save();
+        await clearLiveDayCaches(String(entry.userId));
         return entry;
     }
 }

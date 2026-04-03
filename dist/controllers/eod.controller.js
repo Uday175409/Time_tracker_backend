@@ -20,6 +20,11 @@ export const getEOD = async (req, res) => {
         if (!userId) {
             return res.status(400).json({ success: false, message: 'userId is required', errorType: 'missing_required_field' });
         }
+        if (date === EODService.getCurrentDateString()) {
+            const data = await EODService.getCurrentEOD(userId);
+            res.json({ success: true, eod: data.eod });
+            return;
+        }
         const eod = await EODService.getOrCreateEOD(userId, date);
         res.json({ success: true, eod });
     }

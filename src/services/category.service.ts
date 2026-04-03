@@ -1,4 +1,5 @@
 import Category, { DEFAULT_CATEGORIES } from '../models/Category.js';
+import { clearLiveDayCaches } from '../lib/redis-cache.js';
 
 const PRODUCTIVE_CACHE_TTL_MS = 60_000;
 const productiveNamesCache = new Map<string, { expiresAt: number; names: string[] }>();
@@ -54,6 +55,7 @@ export class CategoryService {
     });
 
     clearProductiveNamesCache(userId);
+    await clearLiveDayCaches(userId);
 
     return category;
   }
@@ -63,6 +65,7 @@ export class CategoryService {
     const category = await Category.findOneAndDelete({ _id: categoryId, userId });
     if (!category) throw new Error('Category not found or access denied');
     clearProductiveNamesCache(userId);
+    await clearLiveDayCaches(userId);
     return category;
   }
 

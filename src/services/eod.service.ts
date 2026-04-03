@@ -1,6 +1,14 @@
 import EODSummary from '../models/EODSummary.js';
 import TimeEntry from '../models/TimeEntry.js';
 import { CategoryService } from './category.service.js';
+import {
+  clearLiveDayCaches,
+  getCurrentEodCacheKey,
+  getSecondsUntilEndOfUtcDay,
+  getUtcDateString,
+  readJsonCache,
+  writeJsonCache,
+} from '../lib/redis-cache.js';
 
 /**
  * EODService manages End-of-Day summaries.
@@ -10,7 +18,7 @@ import { CategoryService } from './category.service.js';
  */
 export class EODService {
   static getCurrentDateString() {
-    return new Date().toISOString().split('T')[0];
+    return getUtcDateString();
   }
 
   /**
@@ -52,9 +60,19 @@ export class EODService {
    */
   static async getCurrentEOD(userId: string) {
     const date = this.getCurrentDateString();
-    const eod = await this.getOrCreateEOD(userId, date);
+    const cacheKey = getCurrentEodCacheKey(userId, date);
+    const cached = await readJsonCache<{ date: string; eod: unknown }>(cacheKey);
 
-    return { date, eod };
+    if (cached) {
+      return cached;
+    }
+
+    const eod = await this.getOrCreateEOD(userId, date);
+    const payload = { date, eod: eod.toObject() };
+
+    await writeJsonCache(cacheKey, payload, getSecondsUntilEndOfUtcDay());
+
+    return payload;
   }
 
   /**
@@ -87,6 +105,7 @@ export class EODService {
     if (updates.blockers !== undefined) eod.blockers = updates.blockers;
 
     await eod.save();
+    await clearLiveDayCaches(userId);
     return eod;
   }
 
